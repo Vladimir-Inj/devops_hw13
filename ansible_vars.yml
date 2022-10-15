@@ -1,0 +1,14 @@
+---
+# Please do not change IPs
+host_a_ip: '192.168.100.1'
+host_b_ip: '192.168.100.2'
+host_c_ip: '192.168.100.3'
+mysql_host: '192.168.101.1'
+wordpress_host: '192.168.102.1'
+
+# You can change this values
+mysql_db: 'wordpress'
+mysql_user: 'wp_user'
+mysql_pass: 'wp_pass'
+site_domain: 'mysite.com'
+wordpress_dir: '/var/www/wordpress'

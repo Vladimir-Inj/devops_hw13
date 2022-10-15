@@ -1,0 +1,39 @@
+---
+- name: Deploy
+  hosts: all
+  gather_facts: false
+  become: true
+  vars_files:
+    - ../ansible_vars.yml
+  tasks:
+    - name: Copy network
+      copy:
+        src: ./netplan/netplan.yml
+        dest: /etc/netplan/50-vagrant.yaml
+
+    - name: Run network configuration
+      command: netplan apply
+
+    - name: Enable IPv4 forwarding
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_set: yes
+        state: present
+        reload: yes
+
+    # Enable masquerade
+    - name: Enable NAT Masquerade
+      iptables:
+        table: nat
+        chain: POSTROUTING
+        out_interface: eth0
+        jump: MASQUERADE
+        state: present
+
+    # Add site to hosts
+    - name: Add Wordpress site to hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ host_a_ip }} {{ site_domain }}"
+

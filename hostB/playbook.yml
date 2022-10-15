@@ -1,0 +1,91 @@
+---
+- name: Deploy
+  hosts: all
+  become: true
+  gather_facts: false
+  vars_files:
+    - ../ansible_vars.yml
+  tasks:
+    # Set network
+    - name: Copy network
+      copy:
+        src: ./netplan/netplan.yml
+        dest: /etc/netplan/50-vagrant.yaml
+
+    - name: Run network configuration
+      command: sudo netplan apply
+
+    - name: Remove default Vagrant route
+      command: sudo ip route del default via 10.0.2.2
+
+    - name: Enable IPv4 forwarding
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_set: yes
+        state: present
+        reload: yes
+
+    # Install and config MySQL
+    - name: Install mysql-server
+      apt:
+        name:
+          - mysql-server
+        state: present
+        update_cache: yes
+
+    - name: Enable remote connections to mysql
+      lineinfile:
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf
+        regexp: "^bind-address = {{ mysql_host }}"
+        line: "bind-address = {{ mysql_host }}"
+        insertafter: '^bind-address'
+      notify:
+        - Restart mysql
+
+    - name: Enable mysql 3306 port
+      lineinfile:
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf
+        regexp: "# port "
+        line: "port = 3306"
+        insertafter: '^# port '
+      notify:
+        - Restart mysql
+
+    # Install PyMySQL libs
+    - name: Install Python
+      apt:
+        name:
+          - python3
+          - python3-pip
+        state: present
+
+    - name: Install PyMySQL
+      pip:
+        name:
+          - PyMySQL
+        state: present
+        executable: pip3
+
+    # Create MySQL db and user
+    - name: Create new database
+      mysql_db:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        name: "{{ mysql_db }}"
+        state: present
+
+    - name: Create new db user
+      mysql_user:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        host: '%'
+        name: "{{ mysql_user }}"
+        password: "{{ mysql_pass }}"
+        priv:
+          'wordpress.*': 'ALL,GRANT'
+        state: present
+
+  handlers:
+    - name: Restart mysql
+      service:
+        name: mysql
+        state: restarted

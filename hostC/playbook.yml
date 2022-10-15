@@ -1,0 +1,98 @@
+---
+- name: Deploy
+  hosts: all
+  become: true
+  gather_facts: false
+  vars_files:
+    - ../ansible_vars.yml
+  tasks:
+    # Set network
+    - name: Copy network
+      copy:
+        src: ./netplan/netplan.yml
+        dest: /etc/netplan/50-vagrant.yaml
+
+    - name: Run network configuration
+      command: sudo netplan apply
+
+    - name: Remove default Vagrant route
+      command: sudo ip route del default via 10.0.2.2
+
+    - name: Enable IPv4 forwardinlg
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_set: yes
+        state: present
+        reload: yes
+
+    # Install and config Apache2 and PHP
+    - name: Install Apache and PHP
+      apt:
+        name:
+          - apache2
+          - php
+          - libapache2-mod-php
+          - php-mysql
+          - php-pdo
+        state: present
+        update_cache: yes
+
+    - name: Config apache2
+      template:
+        src: ./apache2/default.j2
+        dest: /etc/apache2/sites-enabled/default.conf
+      notify:
+        - Restart apache2
+
+    # Install and config Wordpress
+    - name: Download repo if not exists
+      git:
+        repo: 'https://github.com/WordPress/WordPress.git'
+        dest: "{{ wordpress_dir }}"
+        update: no
+
+    - name: Set WP-config
+      copy:
+        src: "{{ wordpress_dir }}/wp-config-sample.php"
+        dest: "{{ wordpress_dir }}/wp-config.php"
+        remote_src: yes
+        force: no
+
+    - name: Set DB host
+      lineinfile:
+        path: "{{ wordpress_dir }}/wp-config.php"
+        regexp: "'localhost'"
+        line: "define( 'DB_HOST', '{{ mysql_host }}' );"
+
+    - name: Set DB name
+      lineinfile:
+        path: "{{ wordpress_dir }}/wp-config.php"
+        regexp: "'database_name_here'"
+        line: "define( 'DB_NAME', '{{ mysql_db }}' );"
+
+    - name: Set DB user
+      lineinfile:
+        path: "{{ wordpress_dir }}/wp-config.php"
+        regexp: "'username_here'"
+        line: "define( 'DB_USER', '{{ mysql_user }}' );"
+
+    - name: Set DB password
+      lineinfile:
+        path: "{{ wordpress_dir }}/wp-config.php"
+        regexp: "'password_here'"
+        line: "define( 'DB_PASSWORD', '{{ mysql_pass }}' );"
+
+    - name: Change project dir owner
+      file:
+        path: /var/www
+        state: directory
+        recurse: true
+        owner: www-data
+        group: www-data
+
+  handlers:
+    - name: Restart apache2
+      service:
+        name: apache2
+        state: restarted
