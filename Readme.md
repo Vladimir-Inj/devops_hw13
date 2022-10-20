@@ -15,3 +15,8 @@ vagrant ssh gateway
 wget -O - mysite.com
 ````
 Domain name `mysite.com` corresponds variable `site_domain` in `ansible_vars.yml`
+
+### Uninstall
+````
+vagrant destoy
+````
